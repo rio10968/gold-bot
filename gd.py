@@ -15,6 +15,11 @@ api_key = os.getenv("TWELVE_DATA_API_KEY")
 app = Flask(__name__)
 symbol = "XAU/USD"
 
+# ✅ Add this health check route for Render
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running!"
+
 if platform.system() == "Windows":
     import winsound
 
@@ -76,7 +81,6 @@ def analyze_data(df, interval):
         sl = latest_close + atr * risk
         tp = latest_close - atr * risk
 
-    # ✅ Fix SL/TP direction if needed
     if ma_signal == "BUY" and sl > tp:
         sl, tp = tp, sl
     elif ma_signal == "SELL" and sl < tp:
