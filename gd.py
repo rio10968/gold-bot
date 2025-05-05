@@ -17,6 +17,7 @@ def send_telegram_message(message, chat_id):
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {'chat_id': chat_id, 'text': message}
     response = requests.post(url, data=payload)
+    print(f"📤 Telegram response: {response.status_code} - {response.text}")
     return response
 
 def fetch_live_price(symbol):
@@ -87,33 +88,38 @@ def analyze_data(df, interval):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.get_json()
-    print("✅ Webhook data received:", data)
-
-    if not data or "message" not in data:
-        print("⚠️ No message found in update.")
-        return '', 200
-
-    message_obj = data["message"]
-    chat = message_obj.get("chat", {})
-    chat_id = chat.get("id")
-    user_name = chat.get("username") or chat.get("first_name", "Trader")
-
-    if not chat_id:
-        print("❌ chat_id missing.")
-        return '', 200
-
-    if "text" not in message_obj:
-        print("⚠️ Message has no text. Ignored.")
-        return '', 200
-
-    message = message_obj["text"]
-    print(f"📩 Command received: {message} from {user_name}")
-
-    live_price = fetch_live_price(symbol)
-    live_price_message = f"💰 Live XAU/USD Price: {live_price:.2f}" if live_price else "❌ Error fetching live price."
-
     try:
+        data = request.get_json()
+        if not data:
+            print("❌ Failed to parse JSON from webhook.")
+            return '', 200
+
+        print("✅ Webhook data received:", data)
+
+        if "message" not in data:
+            print("⚠️ No message found in update.")
+            return '', 200
+
+        message_obj = data["message"]
+        chat = message_obj.get("chat", {})
+        chat_id = chat.get("id")
+        user_name = chat.get("username") or chat.get("first_name", "Trader")
+
+        if not chat_id:
+            print("❌ chat_id missing.")
+            return '', 200
+
+        if "text" not in message_obj:
+            print("⚠️ Message has no text. Ignored.")
+            return '', 200
+
+        message = message_obj["text"]
+        print(f"📩 Command received: {message} from {user_name}")
+
+        live_price = fetch_live_price(symbol)
+        live_price_message = f"💰 Live XAU/USD Price: {live_price:.2f}" if live_price else "❌ Error fetching live price."
+
+        # Command handling
         if message == '/signals':
             intervals = ["1h", "30min", "15min", "5min"]
             full_message = f"📩 Hello {user_name}!\n📊 Multi-Timeframe Signal Summary:\n\n{live_price_message}\n\n"
@@ -122,7 +128,7 @@ def webhook():
                 if df is not None:
                     analysis = analyze_data(df, interval)
                     full_message += analysis + "\n" + ("─" * 40) + "\n"
-            response = send_telegram_message(full_message.strip(), chat_id)
+            send_telegram_message(full_message.strip(), chat_id)
 
         elif message == '/long_term':
             intervals = ["4h", "8h", "12h", "1day"]
@@ -132,30 +138,28 @@ def webhook():
                 if df is not None:
                     analysis = analyze_data(df, interval)
                     full_message += analysis + "\n" + ("─" * 40) + "\n"
-            response = send_telegram_message(full_message.strip(), chat_id)
+            send_telegram_message(full_message.strip(), chat_id)
 
         elif message == '/status':
             df = fetch_data(symbol, "1h")
             if df is not None:
                 result = analyze_data(df, "1h")
-                response = send_telegram_message(f"📩 Hello {user_name}!\n{live_price_message}\n{result}", chat_id)
+                send_telegram_message(f"📩 Hello {user_name}!\n{live_price_message}\n{result}", chat_id)
 
         elif message == '/latest_signal':
             df = fetch_data(symbol, "5min")
             if df is not None:
                 result = analyze_data(df, "5min")
-                response = send_telegram_message(f"📩 Hello {user_name}!\n{live_price_message}\n{result}", chat_id)
+                send_telegram_message(f"📩 Hello {user_name}!\n{live_price_message}\n{result}", chat_id)
 
         else:
-            response = send_telegram_message(
+            send_telegram_message(
                 "🤖 Unknown command.\nTry /signals, /status, /latest_signal, or /long_term.",
                 chat_id
             )
 
-        print("📤 Telegram response:", response.status_code, response.text)
-
     except Exception as e:
-        print("❌ Error processing command:", str(e))
+        print(f"❌ Error processing webhook: {str(e)}")
 
     return '', 200
 
